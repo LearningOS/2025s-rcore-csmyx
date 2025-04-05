@@ -17,6 +17,7 @@ mod task;
 use crate::config::MAX_APP_NUM;
 use crate::loader::{get_num_app, init_app_cx};
 use crate::sync::UPSafeCell;
+use crate::syscall::SYSCALL_ARRAY;
 use lazy_static::*;
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
@@ -51,9 +52,11 @@ lazy_static! {
     /// Global variable: TASK_MANAGER
     pub static ref TASK_MANAGER: TaskManager = {
         let num_app = get_num_app();
+        let counter: [(usize, usize); SYSCALL_ARRAY.len()] = SYSCALL_ARRAY.map(|id| (id, 0));
         let mut tasks = [TaskControlBlock {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
+            syscall_counter: counter.clone(),
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -135,6 +138,27 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+
+    /// Increment syscall counter
+    fn increment_syscall_counter(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let counter = &mut inner.tasks[current].syscall_counter;
+        if let Some(x) = counter.iter_mut().find(|(id, _)| *id == syscall_id) {
+            x.1 += 1;
+        }
+    }
+
+    /// Get syscall counter
+    fn get_syscall_counter(&self, syscall_id: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let counter = &mut inner.tasks[current].syscall_counter;
+        counter
+            .iter()
+            .find(|(id, _)| *id == syscall_id)
+            .map_or(-1, |(_, cnt)| *cnt as isize)
+    }
 }
 
 /// Run the first task in task list.
@@ -146,6 +170,16 @@ pub fn run_first_task() {
 /// or there is no `Ready` task and we can exit with all applications completed
 fn run_next_task() {
     TASK_MANAGER.run_next_task();
+}
+
+/// Increment syscall counter
+pub fn increment_syscall_counter(id: usize) {
+    TASK_MANAGER.increment_syscall_counter(id);
+}
+
+/// Get syscall counter
+pub fn get_syscall_counter(id: usize) -> isize {
+    TASK_MANAGER.get_syscall_counter(id)
 }
 
 /// Change the status of current `Running` task into `Ready`.
