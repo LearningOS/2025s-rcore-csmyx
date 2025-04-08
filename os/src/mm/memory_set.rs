@@ -63,12 +63,27 @@ impl MemorySet {
             None,
         );
     }
-    fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
+    pub(crate) fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
             map_area.copy_data(&mut self.page_table, data);
         }
         self.areas.push(map_area);
+    }
+    /// Try to push a new area into the memory set.
+    /// Check if the new area intersects with any existing areas first.
+    /// Return true if the push is successful, false otherwise.
+    pub(crate) fn try_push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) -> bool {
+        if self.areas.iter().all(|x| !x.intersects_with(&map_area)) {
+            map_area.map(&mut self.page_table);
+            if let Some(data) = data {
+                map_area.copy_data(&mut self.page_table, data);
+            }
+            self.areas.push(map_area);
+            true
+        } else {
+            false
+        }
     }
     /// Mention that trampoline is not collected by areas.
     fn map_trampoline(&mut self) {
@@ -272,7 +287,7 @@ pub struct MapArea {
 }
 
 impl MapArea {
-    pub fn new(
+    pub(crate) fn new(
         start_va: VirtAddr,
         end_va: VirtAddr,
         map_type: MapType,
@@ -287,7 +302,7 @@ impl MapArea {
             map_perm,
         }
     }
-    pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
+    pub(crate) fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         let ppn: PhysPageNum;
         match self.map_type {
             MapType::Identical => {
@@ -303,32 +318,32 @@ impl MapArea {
         page_table.map(vpn, ppn, pte_flags);
     }
     #[allow(unused)]
-    pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
+    pub(crate) fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         if self.map_type == MapType::Framed {
             self.data_frames.remove(&vpn);
         }
         page_table.unmap(vpn);
     }
-    pub fn map(&mut self, page_table: &mut PageTable) {
+    pub(crate) fn map(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
             self.map_one(page_table, vpn);
         }
     }
     #[allow(unused)]
-    pub fn unmap(&mut self, page_table: &mut PageTable) {
+    pub(crate) fn unmap(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
             self.unmap_one(page_table, vpn);
         }
     }
     #[allow(unused)]
-    pub fn shrink_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
+    pub(crate) fn shrink_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
         for vpn in VPNRange::new(new_end, self.vpn_range.get_end()) {
             self.unmap_one(page_table, vpn)
         }
         self.vpn_range = VPNRange::new(self.vpn_range.get_start(), new_end);
     }
     #[allow(unused)]
-    pub fn append_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
+    pub(crate) fn append_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
         for vpn in VPNRange::new(self.vpn_range.get_end(), new_end) {
             self.map_one(page_table, vpn)
         }
@@ -356,11 +371,15 @@ impl MapArea {
             current_vpn.step();
         }
     }
+    /// Check if the area intersects with the given range
+    pub fn intersects_with(&self, other: &MapArea) -> bool {
+        self.vpn_range.intersects_with(&other.vpn_range)
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 /// map type for memory set: identical or framed
-pub enum MapType {
+pub(crate) enum MapType {
     Identical,
     Framed,
 }

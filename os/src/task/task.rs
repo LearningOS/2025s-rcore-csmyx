@@ -1,8 +1,10 @@
 //! Types related to task management
+use core::f32::consts::E;
+
 use super::TaskContext;
 use crate::config::TRAP_CONTEXT_BASE;
 use crate::mm::{
-    kernel_stack_position, MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE,
+    kernel_stack_position, MapArea, MapPermission, MapType, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE
 };
 use crate::trap::{trap_handler, TrapContext};
 use alloc::collections::BTreeMap;
@@ -42,6 +44,17 @@ impl TaskControlBlock {
     /// get the user token
     pub fn get_user_token(&self) -> usize {
         self.memory_set.token()
+    }
+    /// try to insert a new area into the memory_set, return false if failed
+    pub fn try_push_area(
+        &mut self,
+        area: MapArea,
+    ) -> bool {
+        // self.memory_set.
+        self.memory_set.try_push(
+            area,
+            None,
+        )
     }
     /// Based on the elf info in program, build the contents of task in a new address space
     pub fn new(elf_data: &[u8], app_id: usize) -> Self {

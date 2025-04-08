@@ -15,6 +15,7 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{MapArea, MapPermission, MapType, VirtAddr};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
@@ -138,17 +139,25 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let cur = inner.current_task;
         let counter = &mut inner.tasks[cur].syscall_counter;
-        counter
-            .entry(id)
-            .and_modify(|cnt| *cnt += 1)
-            .or_insert(1);
+        counter.entry(id).and_modify(|cnt| *cnt += 1).or_insert(1);
     }
 
     /// Get the count of given type syscall of the current 'Running' task
     fn get_syscall_cnt(&self, id: usize) -> usize {
         let inner = self.inner.exclusive_access();
         let cur = inner.current_task;
-        inner.tasks[cur].syscall_counter.get(&id).copied().unwrap_or(0)
+        inner.tasks[cur]
+            .syscall_counter
+            .get(&id)
+            .copied()
+            .unwrap_or(0)
+    }
+
+    /// Try to push a new area into the current task's memory set, return false if failed.
+    fn try_push_area(&self, area: MapArea) -> bool {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].try_push_area(area)
     }
 
     /// Switch current `Running` task to the task we have found,
@@ -229,4 +238,10 @@ pub fn increment_syscall_cnt(id: usize) {
 /// Get the count of given type syscall of the current 'Running' task
 pub fn get_syscall_cnt(id: usize) -> usize {
     TASK_MANAGER.get_syscall_cnt(id)
+}
+
+/// Try to push a new area into the current task's memory set, return false if failed.
+pub fn try_push_area(start_va: VirtAddr, end_va: VirtAddr, map_type: MapType, map_perm: MapPermission) -> bool {
+    let erea = MapArea::new(start_va, end_va, map_type, map_perm);
+    TASK_MANAGER.try_push_area(erea)
 }

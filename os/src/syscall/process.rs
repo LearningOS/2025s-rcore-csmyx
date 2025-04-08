@@ -1,8 +1,7 @@
 //! Process management syscalls
-use crate::mm::{translated_ptr_get, translated_ptr_get_mut};
+use crate::mm::{translated_ptr_get, translated_ptr_get_mut, MapPermission, MapType, VirtAddr};
 use crate::task::{
-    change_program_brk, current_user_token, exit_current_and_run_next, get_syscall_cnt,
-    suspend_current_and_run_next,
+    change_program_brk, current_user_token, exit_current_and_run_next, get_syscall_cnt, try_push_area, suspend_current_and_run_next
 };
 use crate::timer::get_time_us;
 
@@ -75,9 +74,21 @@ pub fn sys_trace(trace_request: usize, id: usize, data: usize) -> isize {
 }
 
 // YOUR JOB: Implement mmap.
-pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
-    -1
+pub fn sys_mmap(start: usize, len: usize, prot: usize) -> isize {
+    trace!("kernel: sys_mmap");
+    let start_va = VirtAddr::from(start);
+    if !start_va.aligned() || prot == 0 || (prot >> 3) != 0 {
+        return -1;
+    }
+
+    let end_va = VirtAddr::from(start + len);
+    let mut map_perm = MapPermission::from_bits_truncate((prot << 1) as u8);
+    map_perm |= MapPermission::U;
+
+    match try_push_area(start_va, end_va, MapType::Framed, map_perm) {
+        true => 0,
+        false => -1,
+    }
 }
 
 // YOUR JOB: Implement munmap.

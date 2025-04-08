@@ -231,6 +231,9 @@ where
     pub fn get_end(&self) -> T {
         self.r
     }
+    pub fn intersects_with(&self, other: &Self) -> bool {
+        self.l < other.r && other.l < self.r
+    }
 }
 impl<T> IntoIterator for SimpleRange<T>
 where
