@@ -71,6 +71,10 @@ impl PageTableEntry {
     pub fn executable(&self) -> bool {
         (self.flags() & PTEFlags::X) != PTEFlags::empty()
     }
+    /// The page pointered by page table entry is accessible to user?
+    pub fn user(&self) -> bool {
+        (self.flags() & PTEFlags::U) != PTEFlags::empty()
+    }
 }
 
 /// page table structure
@@ -182,13 +186,14 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
 }
 
 /// Translate a ptr[u8] to a mutable reference through page table
-/// Return None if the page table entry is invalid or not writable
+/// Return None if the ptr is invalid in current user address space
 pub fn translated_ptr_get_mut<T>(token: usize, ptr: *const u8) -> Option<&'static mut T> {
     let page_table = PageTable::from_token(token);
     let va = VirtAddr::from(ptr as usize);
     let vpn = va.floor();
     if let Some(pte) = page_table.translate(vpn) {
-        if pte.is_valid() && pte.writable() {
+        // the PTE must include Valid (V), Writable (W), and User (U)
+        if pte.is_valid() && pte.writable() && pte.user() {
             let ppn = pte.ppn();
             let pa = PhysAddr::new(ppn, va.page_offset());
             // va is identical to pa in kernel space, as physical memoy has been mapped identically
@@ -202,13 +207,14 @@ pub fn translated_ptr_get_mut<T>(token: usize, ptr: *const u8) -> Option<&'stati
 }
 
 /// Translate a ptr[u8] to a reference through page table
-/// Return None if the page table entry is invalid or not readable
+/// Return None if the ptr is invalid in current user address space
 pub fn translated_ptr_get<T>(token: usize, ptr: *const u8) -> Option<&'static T> {
     let page_table = PageTable::from_token(token);
     let va = VirtAddr::from(ptr as usize);
     let vpn = va.floor();
     if let Some(pte) = page_table.translate(vpn) {
-        if pte.is_valid() && pte.readable() {
+        // the PTE must include Valid (V), Readble (R), and User (U)
+        if pte.is_valid() && pte.readable() && pte.user() {
             let ppn = pte.ppn();
             let pa = PhysAddr::new(ppn, va.page_offset());
             // va is identical to pa in kernel space, as physical memoy has been mapped identically

@@ -48,7 +48,9 @@ pub fn sys_trace(trace_request: usize, id: usize, data: usize) -> isize {
     trace!("kernel: sys_trace");
     match trace_request {
         0 => {
+            debug!("va ptr: {:#x}", id);
             if let Some(id) = translated_ptr_get::<u8>(current_user_token(), id as *const u8) {
+                debug!("pa ptr: {:#x}", id);
                 *id as isize
             } else {
                 -1
@@ -64,8 +66,7 @@ pub fn sys_trace(trace_request: usize, id: usize, data: usize) -> isize {
         }
         2 => {
             let cnt = get_syscall_cnt(id) as isize;
-            // use for testing
-            warn!("sys_trace: syscall id: {}, counter: {}", id, cnt);
+            debug!("sys_trace: syscall id: {}, counter: {}", id, cnt);
             cnt
         }
         _ => -1,
