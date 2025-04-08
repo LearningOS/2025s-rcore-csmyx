@@ -1,5 +1,6 @@
 //! Implementation of [`PageTableEntry`] and [`PageTable`].
 
+use crate::mm::PhysAddr;
 use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
 use alloc::vec;
 use alloc::vec::Vec;
@@ -178,4 +179,15 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         start = end_va.into();
     }
     v
+}
+
+/// Translate a ptr[u8] to a mutable reference through page table
+pub fn translated_ptr_get_mut<T>(token: usize, ptr: *const u8) -> &'static mut T {
+    let page_table = PageTable::from_token(token);
+    let va = VirtAddr::from(ptr as usize);
+    let vpn = va.floor();
+    let ppn = page_table.translate(vpn).unwrap().ppn();
+    let pa = PhysAddr::new(ppn, va.page_offset());
+    // va is identical to pa in kernel space, as physical memoy has been mapped identically
+    pa.get_mut()
 }

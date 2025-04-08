@@ -126,6 +126,10 @@ impl From<VirtPageNum> for VirtAddr {
     }
 }
 impl PhysAddr {
+    /// Get the physical address from physical page number and offset
+    pub fn new(ppn: PhysPageNum, offset: usize) -> Self {
+        Self((ppn.0 << PAGE_SIZE_BITS) + (offset % PAGE_SIZE))
+    }
     /// Get the (floor) physical page number
     pub fn floor(&self) -> PhysPageNum {
         PhysPageNum(self.0 / PAGE_SIZE)
