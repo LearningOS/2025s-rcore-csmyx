@@ -1,5 +1,5 @@
 //! Process management syscalls
-use crate::mm::translated_ptr_get_mut;
+use crate::mm::{translated_ptr_get, translated_ptr_get_mut};
 use crate::task::{
     change_program_brk, current_user_token, exit_current_and_run_next, get_syscall_cnt,
     suspend_current_and_run_next,
@@ -45,11 +45,6 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
 /// HINT: You might reimplement it with virtual memory management.
 pub fn sys_trace(trace_request: usize, id: usize, data: usize) -> isize {
     trace!("kernel: sys_trace");
-    // assert!(!kernel_space
-    //     .page_table
-    //     .translate(mid_rodata.floor())
-    //     .unwrap()
-    //     .writable(),);
     match trace_request {
         0 => {
             let id: &u8 = translated_ptr_get(current_user_token(), id as *const u8);

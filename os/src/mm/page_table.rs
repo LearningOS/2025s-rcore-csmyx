@@ -191,3 +191,8 @@ pub fn translated_ptr_get_mut<T>(token: usize, ptr: *const u8) -> &'static mut T
     // va is identical to pa in kernel space, as physical memoy has been mapped identically
     pa.get_mut()
 }
+
+/// Translate a ptr[u8] to a reference through page table
+pub fn translated_ptr_get<T>(token: usize, ptr: *const u8) -> &'static T {
+    translated_ptr_get_mut(token, ptr)
+}

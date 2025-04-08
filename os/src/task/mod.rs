@@ -133,6 +133,24 @@ impl TaskManager {
         inner.tasks[cur].change_program_brk(size)
     }
 
+    /// Increment the count of given type syscall of the current 'Running' task
+    fn increment_syscall_cnt(&self, id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        let counter = &mut inner.tasks[cur].syscall_counter;
+        counter
+            .entry(id)
+            .and_modify(|cnt| *cnt += 1)
+            .or_insert(1);
+    }
+
+    /// Get the count of given type syscall of the current 'Running' task
+    fn get_syscall_cnt(&self, id: usize) -> usize {
+        let inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].syscall_counter.get(&id).copied().unwrap_or(0)
+    }
+
     /// Switch current `Running` task to the task we have found,
     /// or there is no `Ready` task and we can exit with all applications completed
     fn run_next_task(&self) {
@@ -201,4 +219,14 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+/// Increment the count of given type syscall of the current 'Running' task
+pub fn increment_syscall_cnt(id: usize) {
+    TASK_MANAGER.increment_syscall_cnt(id);
+}
+
+/// Get the count of given type syscall of the current 'Running' task
+pub fn get_syscall_cnt(id: usize) -> usize {
+    TASK_MANAGER.get_syscall_cnt(id)
 }
