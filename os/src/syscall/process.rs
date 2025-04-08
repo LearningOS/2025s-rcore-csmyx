@@ -1,10 +1,9 @@
 //! Process management syscalls
-use crate::mm::{translated_ptr_get, translated_ptr_get_mut, MapPermission, MapType, VirtAddr};
+use crate::mm::{translated_ptr_get, translated_ptr_get_mut, MapPermission, VirtAddr, MapType};
 use crate::task::{
-    change_program_brk, current_user_token, exit_current_and_run_next, get_syscall_cnt, try_push_area, suspend_current_and_run_next
+    change_program_brk, current_user_token, exit_current_and_run_next, get_syscall_cnt, suspend_current_and_run_next, try_push_area, try_remove_area
 };
 use crate::timer::get_time_us;
-
 #[repr(C)]
 #[derive(Debug)]
 pub struct TimeVal {
@@ -92,10 +91,20 @@ pub fn sys_mmap(start: usize, len: usize, prot: usize) -> isize {
 }
 
 // YOUR JOB: Implement munmap.
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
-    -1
+pub fn sys_munmap(start: usize, len: usize) -> isize {
+    trace!("kernel: sys_munmap");
+    let start_va = VirtAddr::from(start);
+    if !start_va.aligned() {
+        return -1;
+    }
+    let end_va = VirtAddr::from(start + len);
+
+    match try_remove_area(start_va, end_va) {
+        true => 0,
+        false => -1,
+    }
 }
+
 /// change data segment size
 pub fn sys_sbrk(size: i32) -> isize {
     trace!("kernel: sys_sbrk");

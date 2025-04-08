@@ -1,10 +1,9 @@
 //! Types related to task management
-use core::f32::consts::E;
-
 use super::TaskContext;
 use crate::config::TRAP_CONTEXT_BASE;
 use crate::mm::{
-    kernel_stack_position, MapArea, MapPermission, MapType, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE
+    kernel_stack_position, MapArea, MapPermission, MemorySet, PhysPageNum, VPNRange, VirtAddr,
+    KERNEL_SPACE,
 };
 use crate::trap::{trap_handler, TrapContext};
 use alloc::collections::BTreeMap;
@@ -46,16 +45,15 @@ impl TaskControlBlock {
         self.memory_set.token()
     }
     /// try to insert a new area into the memory_set, return false if failed
-    pub fn try_push_area(
-        &mut self,
-        area: MapArea,
-    ) -> bool {
-        // self.memory_set.
-        self.memory_set.try_push(
-            area,
-            None,
-        )
+    pub fn try_push_area(&mut self, area: MapArea) -> bool {
+        self.memory_set.try_push(area, None)
     }
+    /// try to remove an area from the memory_set, return false if failed
+    pub fn try_remove_area(&mut self, start_va: VirtAddr, end_va: VirtAddr) -> bool {
+        let vpn_range = VPNRange::new(start_va.floor(), end_va.ceil());
+        self.memory_set.try_remove(vpn_range)
+    }
+
     /// Based on the elf info in program, build the contents of task in a new address space
     pub fn new(elf_data: &[u8], app_id: usize) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack

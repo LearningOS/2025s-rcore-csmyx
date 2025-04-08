@@ -85,6 +85,16 @@ impl MemorySet {
             false
         }
     }
+    pub(crate) fn try_remove(&mut self, vpn_range: VPNRange,) -> bool {
+        match self.areas.iter_mut().find(|x| x.vpn_range == vpn_range) {
+            Some(area) => {
+                area.unmap(&mut self.page_table);
+                self.areas.retain(|x| x.vpn_range != vpn_range);
+                true
+            },
+            None => false,
+        }
+    }
     /// Mention that trampoline is not collected by areas.
     fn map_trampoline(&mut self) {
         self.page_table.map(
@@ -317,7 +327,6 @@ impl MapArea {
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
         page_table.map(vpn, ppn, pte_flags);
     }
-    #[allow(unused)]
     pub(crate) fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         if self.map_type == MapType::Framed {
             self.data_frames.remove(&vpn);
@@ -329,7 +338,6 @@ impl MapArea {
             self.map_one(page_table, vpn);
         }
     }
-    #[allow(unused)]
     pub(crate) fn unmap(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
             self.unmap_one(page_table, vpn);
@@ -379,8 +387,10 @@ impl MapArea {
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 /// map type for memory set: identical or framed
-pub(crate) enum MapType {
+pub enum MapType {
+    /// Maps virtual addresses directly to identical physical addresses.
     Identical,
+    /// Maps virtual addresses to dynamically allocated physical frames.
     Framed,
 }
 

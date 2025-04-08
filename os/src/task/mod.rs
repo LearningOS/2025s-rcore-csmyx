@@ -160,6 +160,13 @@ impl TaskManager {
         inner.tasks[cur].try_push_area(area)
     }
 
+    /// Try to push a new area into the current task's memory set, return false if failed.
+    fn try_remove_area(&self, start_va: VirtAddr, end_va: VirtAddr) -> bool {
+        let mut inner = self.inner.exclusive_access();
+        let cur = inner.current_task;
+        inner.tasks[cur].try_remove_area(start_va, end_va)
+    }
+
     /// Switch current `Running` task to the task we have found,
     /// or there is no `Ready` task and we can exit with all applications completed
     fn run_next_task(&self) {
@@ -244,4 +251,9 @@ pub fn get_syscall_cnt(id: usize) -> usize {
 pub fn try_push_area(start_va: VirtAddr, end_va: VirtAddr, map_type: MapType, map_perm: MapPermission) -> bool {
     let erea = MapArea::new(start_va, end_va, map_type, map_perm);
     TASK_MANAGER.try_push_area(erea)
+}
+
+/// Try to 
+pub fn try_remove_area(start_va: VirtAddr, end_va: VirtAddr) -> bool {
+    TASK_MANAGER.try_remove_area(start_va, end_va)
 }
