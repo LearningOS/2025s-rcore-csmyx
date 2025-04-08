@@ -33,12 +33,15 @@ pub fn sys_yield() -> isize {
 pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
     trace!("kernel: sys_get_time");
     let us = get_time_us();
-    let ts = translated_ptr_get_mut(current_user_token(), ts as *const u8);
-    *ts = TimeVal {
-        sec: us / 1_000_000,
-        usec: us % 1_000_000,
-    };
-    0
+    if let Some(ts) = translated_ptr_get_mut::<TimeVal>(current_user_token(), ts as *const u8) {
+        *ts = TimeVal {
+            sec: us / 1_000_000,
+            usec: us % 1_000_000,
+        };
+        0
+    } else {
+        -1
+    }
 }
 
 /// TODO: Finish sys_trace to pass testcases
@@ -47,13 +50,19 @@ pub fn sys_trace(trace_request: usize, id: usize, data: usize) -> isize {
     trace!("kernel: sys_trace");
     match trace_request {
         0 => {
-            let id: &u8 = translated_ptr_get(current_user_token(), id as *const u8);
-            *id as isize
+            if let Some(id) = translated_ptr_get::<u8>(current_user_token(), id as *const u8) {
+                *id as isize
+            } else {
+                -1
+            }
         }
         1 => {
-            let id: &mut u8 = translated_ptr_get_mut(current_user_token(), id as *const u8);
-            *id = data as u8;
-            0
+            if let Some(id) = translated_ptr_get_mut::<u8>(current_user_token(), id as *const u8) {
+                *id = data as u8;
+                0
+            } else {
+                -1
+            }
         }
         2 => {
             let cnt = get_syscall_cnt(id) as isize;

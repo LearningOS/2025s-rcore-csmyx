@@ -182,17 +182,41 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
 }
 
 /// Translate a ptr[u8] to a mutable reference through page table
-pub fn translated_ptr_get_mut<T>(token: usize, ptr: *const u8) -> &'static mut T {
+/// Return None if the page table entry is invalid or not writable
+pub fn translated_ptr_get_mut<T>(token: usize, ptr: *const u8) -> Option<&'static mut T> {
     let page_table = PageTable::from_token(token);
     let va = VirtAddr::from(ptr as usize);
     let vpn = va.floor();
-    let ppn = page_table.translate(vpn).unwrap().ppn();
-    let pa = PhysAddr::new(ppn, va.page_offset());
-    // va is identical to pa in kernel space, as physical memoy has been mapped identically
-    pa.get_mut()
+    if let Some(pte) = page_table.translate(vpn) {
+        if pte.is_valid() && pte.writable() {
+            let ppn = pte.ppn();
+            let pa = PhysAddr::new(ppn, va.page_offset());
+            // va is identical to pa in kernel space, as physical memoy has been mapped identically
+            Some(pa.get_mut())
+        } else {
+            None
+        }
+    } else {
+        None
+    }
 }
 
 /// Translate a ptr[u8] to a reference through page table
-pub fn translated_ptr_get<T>(token: usize, ptr: *const u8) -> &'static T {
-    translated_ptr_get_mut(token, ptr)
+/// Return None if the page table entry is invalid or not readable
+pub fn translated_ptr_get<T>(token: usize, ptr: *const u8) -> Option<&'static T> {
+    let page_table = PageTable::from_token(token);
+    let va = VirtAddr::from(ptr as usize);
+    let vpn = va.floor();
+    if let Some(pte) = page_table.translate(vpn) {
+        if pte.is_valid() && pte.readable() {
+            let ppn = pte.ppn();
+            let pa = PhysAddr::new(ppn, va.page_offset());
+            // va is identical to pa in kernel space, as physical memoy has been mapped identically
+            Some(pa.get_mut())
+        } else {
+            None
+        }
+    } else {
+        None
+    }
 }
