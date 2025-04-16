@@ -54,6 +54,46 @@ impl MemorySet {
     pub fn token(&self) -> usize {
         self.page_table.token()
     }
+    /// Check conflicts before insert the new framed area
+    /// Return false if there is a conflict
+    pub fn try_insert_framed_area(
+        &mut self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+        permission: MapPermission,
+    ) -> bool {
+        let area = MapArea::new(start_va, end_va, MapType::Framed, permission);
+        // debug!("addr: {:#?}, {:#?}", start_va, end_va);
+        // debug!(
+        //     "insert_framed_area: {}, {}",
+        //     area.vpn_range.get_start().0,
+        //     area.vpn_range.get_end().0
+        // );
+        if !self.areas.iter().any(|x| x.intersects_with(&area)) {
+            self.push(area, None);
+            true
+        } else {
+            false
+        }
+    }
+    /// Try to remove the area with the given range
+    /// Return false if the area is not found
+    pub fn try_remove_area(&mut self, start_va: VirtAddr, end_va: VirtAddr) -> bool {
+        let vpn_range = VPNRange::new(start_va.floor(), end_va.ceil());
+        // debug!(
+        //     "remove_framed_area: {}, {}",
+        //     vpn_range.get_start().0,
+        //     vpn_range.get_end().0
+        // );
+        match self.areas.iter_mut().find(|x| x.vpn_range == vpn_range) {
+            Some(area) => {
+                area.unmap(&mut self.page_table);
+                self.areas.retain(|x| x.vpn_range != vpn_range);
+                true
+            }
+            None => false,
+        }
+    }
     /// Assume that no conflicts.
     pub fn insert_framed_area(
         &mut self,
@@ -66,7 +106,7 @@ impl MemorySet {
             None,
         );
     }
-    /// remove a area
+    /// remove the area with start_vpn
     pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {
         if let Some((idx, area)) = self
             .areas
@@ -328,6 +368,7 @@ pub struct MapArea {
 }
 
 impl MapArea {
+    /// Create a new MapArea.
     pub fn new(
         start_va: VirtAddr,
         end_va: VirtAddr,
@@ -343,6 +384,7 @@ impl MapArea {
             map_perm,
         }
     }
+    /// Create a new MapArea from another MapArea
     pub fn from_another(another: &Self) -> Self {
         Self {
             vpn_range: VPNRange::new(another.vpn_range.get_start(), another.vpn_range.get_end()),
@@ -351,6 +393,7 @@ impl MapArea {
             map_perm: another.map_perm,
         }
     }
+    /// Mapping the vpn into page_table
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         let ppn: PhysPageNum;
         match self.map_type {
@@ -366,23 +409,27 @@ impl MapArea {
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
         page_table.map(vpn, ppn, pte_flags);
     }
+    /// Unmapping this vpn from page_table
     pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         if self.map_type == MapType::Framed {
             self.data_frames.remove(&vpn);
         }
         page_table.unmap(vpn);
     }
+    /// Mappging all vpns in this vpn_range into page_table
     pub fn map(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
             self.map_one(page_table, vpn);
         }
     }
+    /// Unmapping all vpns in this vpn_range from page_table
     pub fn unmap(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
             self.unmap_one(page_table, vpn);
         }
     }
     #[allow(unused)]
+    /// Shrink the MapArea to new_end
     pub fn shrink_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
         for vpn in VPNRange::new(new_end, self.vpn_range.get_end()) {
             self.unmap_one(page_table, vpn)
@@ -390,6 +437,7 @@ impl MapArea {
         self.vpn_range = VPNRange::new(self.vpn_range.get_start(), new_end);
     }
     #[allow(unused)]
+    /// Append the MapArea to new_end
     pub fn append_to(&mut self, page_table: &mut PageTable, new_end: VirtPageNum) {
         for vpn in VPNRange::new(self.vpn_range.get_end(), new_end) {
             self.map_one(page_table, vpn)
@@ -418,12 +466,19 @@ impl MapArea {
             current_vpn.step();
         }
     }
+    /// Check if the MapArea is intersecting with another MapArea
+    pub fn intersects_with(&self, other: &MapArea) -> bool {
+        self.vpn_range.get_start() < other.vpn_range.get_end()
+            && other.vpn_range.get_start() < self.vpn_range.get_end()
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 /// map type for memory set: identical or framed
 pub enum MapType {
+    /// Mapping virtual addresses directly to the same physical addresses.
     Identical,
+    /// Mapping virtual addresses to new allocated physical addresses.
     Framed,
 }
 
