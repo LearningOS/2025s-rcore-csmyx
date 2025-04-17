@@ -1,8 +1,8 @@
 //! Types related to task management & Functions for completely changing TCB
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-use crate::config::TRAP_CONTEXT_BASE;
 use crate::fs::{File, Stdin, Stdout};
+use crate::config::{INIT_TASK_PRIORITY, TRAP_CONTEXT_BASE};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
@@ -38,6 +38,9 @@ impl TaskControlBlock {
     }
 }
 
+pub struct TaskPriority(pub usize);
+pub struct TaskStride(pub usize);
+
 pub struct TaskControlBlockInner {
     /// The physical page number of the frame where the trap context is placed
     pub trap_cx_ppn: PhysPageNum,
@@ -51,6 +54,12 @@ pub struct TaskControlBlockInner {
 
     /// Maintain the execution status of the current process
     pub task_status: TaskStatus,
+
+    /// The priority of the current process
+    pub task_priority: TaskPriority,
+
+    /// The stride of the current process
+    pub task_stride: TaskStride,
 
     /// Application address space
     pub memory_set: MemorySet,
@@ -135,6 +144,8 @@ impl TaskControlBlock {
                     ],
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    task_priority: TaskPriority(INIT_TASK_PRIORITY),
+                    task_stride: TaskStride(0),
                 })
             },
         };
@@ -216,6 +227,8 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    task_priority: TaskPriority(INIT_TASK_PRIORITY),
+                    task_stride: TaskStride(0),
                 })
             },
         });
@@ -259,6 +272,17 @@ impl TaskControlBlock {
             Some(old_break)
         } else {
             None
+        }
+    }
+    /// set the priority of the task
+    /// return false if failed
+    pub fn set_piority(&self, prio: isize) -> bool {
+        if prio >= 2 {
+            let mut inner = self.inner.exclusive_access();
+            inner.task_priority.0 = prio as usize;
+            true
+        } else {
+            false
         }
     }
 }
