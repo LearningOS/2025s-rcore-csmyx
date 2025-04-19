@@ -2,7 +2,7 @@
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
 use crate::fs::{File, Stdin, Stdout};
-use crate::config::{INIT_TASK_PRIORITY, TRAP_CONTEXT_BASE};
+use crate::config::{BIG_STRIDE, INIT_TASK_PRIORITY, INIT_TASK_STRIDE, TRAP_CONTEXT_BASE};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
@@ -38,8 +38,33 @@ impl TaskControlBlock {
     }
 }
 
+impl PartialEq for TaskControlBlock {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner_exclusive_access().task_pass.0 == other.inner_exclusive_access().task_pass.0
+    }
+}
+
+impl Eq for TaskControlBlock {}
+
+impl PartialOrd for TaskControlBlock {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(&other))
+    }
+}
+
+impl Ord for TaskControlBlock {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        let l = self.inner_exclusive_access().task_pass.0;
+        let r = other.inner_exclusive_access().task_pass.0;
+        let x = isize::MAX as usize;
+        (r-l).cmp(&x).reverse()
+    }
+}
+
 pub struct TaskPriority(pub usize);
-pub struct TaskStride(pub usize);
+
+#[derive(PartialEq, PartialOrd, Eq, Ord)]
+pub struct TaskPass(pub usize);
 
 pub struct TaskControlBlockInner {
     /// The physical page number of the frame where the trap context is placed
@@ -58,8 +83,8 @@ pub struct TaskControlBlockInner {
     /// The priority of the current process
     pub task_priority: TaskPriority,
 
-    /// The stride of the current process
-    pub task_stride: TaskStride,
+    /// The pass f the current process
+    pub task_pass: TaskPass,
 
     /// Application address space
     pub memory_set: MemorySet,
@@ -103,6 +128,12 @@ impl TaskControlBlockInner {
             self.fd_table.len() - 1
         }
     }
+    /// update the stride whenever the task is scheduled
+    pub fn update_stride(&mut self) {
+        let stride = BIG_STRIDE / self.task_priority.0;
+        self.task_pass.0 = self.task_pass.0.wrapping_add(stride);
+        // info!("updated_pass: {:#?}, stride: {:#?}", self.task_pass.0, stride);
+    }
 }
 
 impl TaskControlBlock {
@@ -145,7 +176,7 @@ impl TaskControlBlock {
                     heap_bottom: user_sp,
                     program_brk: user_sp,
                     task_priority: TaskPriority(INIT_TASK_PRIORITY),
-                    task_stride: TaskStride(0),
+                    task_pass: TaskPass(INIT_TASK_STRIDE),
                 })
             },
         };
@@ -228,7 +259,7 @@ impl TaskControlBlock {
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
                     task_priority: TaskPriority(INIT_TASK_PRIORITY),
-                    task_stride: TaskStride(0),
+                    task_pass: TaskPass(INIT_TASK_STRIDE),
                 })
             },
         });
