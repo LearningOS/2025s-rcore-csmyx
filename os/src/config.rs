@@ -23,5 +23,7 @@ pub const CLOCK_FREQ: usize = 12500000;
 pub const MEMORY_END: usize = 0x88000000;
 /// the initial task priority
 pub const INIT_TASK_PRIORITY: usize = 16;
+/// the initial task stride
+pub const INIT_TASK_STRIDE: usize = isize::MAX as usize;
 /// the big stride used for pass calculation
 pub const BIG_STRIDE: usize = isize::MAX as usize;
