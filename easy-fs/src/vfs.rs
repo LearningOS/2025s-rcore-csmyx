@@ -29,11 +29,9 @@ impl Inode {
             block_device,
         }
     }
-    /// Get inode id, almost reverse process of `get_disk_inode_pos`
+    /// Get inode id
     pub fn inode_id(&self) -> usize {
-        let inode_size = core::mem::size_of::<DiskInode>();
-        let inodes_per_block = BLOCK_SZ / inode_size;
-        self.block_id * inodes_per_block + self.block_offset / inode_size
+        self.fs.lock().inode_id(self.block_id, self.block_offset)
     }
     /// Get disk inode type
     pub fn get_disk_inode_type(&self) -> DiskInodeType {
