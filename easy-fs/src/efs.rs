@@ -70,7 +70,7 @@ impl EasyFileSystem {
             },
         );
         // write back immediately
-        // create a inode for root node "/"
+        // create an inode for root node "/"
         assert_eq!(efs.alloc_inode(), 0);
         let (root_inode_block_id, root_inode_offset) = efs.get_disk_inode_pos(0);
         get_block_cache(root_inode_block_id as usize, Arc::clone(&block_device))

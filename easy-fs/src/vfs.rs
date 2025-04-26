@@ -1,6 +1,6 @@
 use super::{
     block_cache_sync_all, get_block_cache, BlockDevice, DirEntry, DiskInode, DiskInodeType,
-    EasyFileSystem, DIRENT_SZ,
+    EasyFileSystem, BLOCK_SZ, DIRENT_SZ,
 };
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -28,6 +28,16 @@ impl Inode {
             fs,
             block_device,
         }
+    }
+    /// Get inode id, almost reverse process of `get_disk_inode_pos`
+    pub fn inode_id(&self) -> usize {
+        let inode_size = core::mem::size_of::<DiskInode>();
+        let inodes_per_block = BLOCK_SZ / inode_size;
+        self.block_id * inodes_per_block + self.block_offset / inode_size
+    }
+    /// Get disk inode type
+    pub fn get_disk_inode_type(&self) -> DiskInodeType {
+        self.read_disk_inode(|disk_inode|  disk_inode.type_)
     }
     /// Call a function over a disk inode to read it
     fn read_disk_inode<V>(&self, f: impl FnOnce(&DiskInode) -> V) -> V {
