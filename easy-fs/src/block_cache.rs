@@ -2,6 +2,7 @@ use super::{BlockDevice, BLOCK_SZ};
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use lazy_static::*;
+use log::debug;
 use spin::Mutex;
 /// Cached block inside memory
 pub struct BlockCache {
@@ -94,6 +95,7 @@ impl BlockCacheManager {
         block_device: Arc<dyn BlockDevice>,
     ) -> Arc<Mutex<BlockCache>> {
         if let Some(pair) = self.queue.iter().find(|pair| pair.0 == block_id) {
+            // debug!("find cache block_id:{}", pair.0);
             Arc::clone(&pair.1)
         } else {
             // substitute

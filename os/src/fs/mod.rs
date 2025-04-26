@@ -37,12 +37,12 @@ pub struct Stat {
 
 impl Stat {
     /// Init stat
-    pub fn init(ino: u64, mode: StatMode) -> Self {
+    pub fn init(ino: u64, mode: StatMode, nlink: u32) -> Self {
         Stat {
             dev: 0,
             ino,
             mode,
-            nlink: 1,
+            nlink,
             pad: [0; 7],
         }
     }
@@ -61,5 +61,5 @@ bitflags! {
     }
 }
 
-pub use inode::{list_apps, open_file, OSInode, OpenFlags};
+pub use inode::{list_apps, open_file, linkat, OSInode, OpenFlags};
 pub use stdio::{Stdin, Stdout};

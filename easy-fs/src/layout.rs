@@ -1,12 +1,13 @@
 use super::{get_block_cache, BlockDevice, BLOCK_SZ};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use log::debug;
 use core::fmt::{Debug, Formatter, Result};
 
 /// Magic number for sanity check
 const EFS_MAGIC: u32 = 0x3b800001;
 /// The max number of direct inodes
-const INODE_DIRECT_COUNT: usize = 28;
+const INODE_DIRECT_COUNT: usize = 27;
 /// The max length of inode name
 const NAME_LENGTH_LIMIT: usize = 27;
 /// The max number of indirect1 inodes
@@ -88,6 +89,7 @@ pub struct DiskInode {
     pub indirect1: u32,
     pub indirect2: u32,
     pub type_: DiskInodeType,
+    pub nlink: u32,
 }
 
 impl DiskInode {
@@ -99,7 +101,18 @@ impl DiskInode {
         self.indirect1 = 0;
         self.indirect2 = 0;
         self.type_ = type_;
+        self.nlink = 1;
     }
+    /// increment link number by 1
+    pub fn nlink_inc(&mut self) {
+        self.nlink += 1;
+        debug!("nlink_inc: {}", self.nlink);
+    }
+    // /// decrement link number by 1
+    // pub fn nlink_dec(&mut self) {
+    //     self.nlink -= 1;
+    // }
+
     /// Whether this inode is a directory
     pub fn is_dir(&self) -> bool {
         self.type_ == DiskInodeType::Directory

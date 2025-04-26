@@ -125,6 +125,20 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     }
 }
 
+/// Link a file
+pub fn linkat(old_name: &str, new_name: &str) -> isize {
+    if let Some(inode) = ROOT_INODE.find(old_name) {
+        // find inode id by old name
+        let inode_id = inode.inode_id() as u32;
+        debug!("linkat inode_id: {}", inode_id);
+        // link the inode to new name
+        ROOT_INODE.link(new_name, inode_id)
+    } else {
+        -1
+    }
+}
+
+
 impl File for OSInode {
     fn readable(&self) -> bool {
         self.readable
@@ -157,14 +171,15 @@ impl File for OSInode {
         total_write_size
     }
     fn state(&self) -> Option<Stat> {
-        let inner= self.inner.exclusive_access();
-        let inode = inner.inode.clone();
+        let inode = &self.inner.exclusive_access().inode;
         let inode_id = inode.inode_id();
+        debug!("state inode_id: {}", inode_id);
         let mode = inode.get_disk_inode_type();
         let mode = match mode {
             DiskInodeType::Directory => StatMode::DIR,
             DiskInodeType::File => StatMode::FILE,
         };
-        Some(Stat::init(inode_id as u64, mode))
+        let nlink = inode.get_disk_inode_nlink();
+        Some(Stat::init(inode_id as u64, mode, nlink))
     }
 }

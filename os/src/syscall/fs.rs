@@ -1,7 +1,7 @@
 //! File and filesystem-related syscalls
 use core::mem;
 
-use crate::fs::{open_file, OpenFlags, Stat};
+use crate::fs::{open_file, linkat, OpenFlags, Stat};
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
 
@@ -96,9 +96,19 @@ pub fn sys_fstat(fd: usize, st: *mut Stat) -> isize {
 }
 
 /// YOUR JOB: Implement linkat.
-pub fn sys_linkat(_old_name: *const u8, _new_name: *const u8) -> isize {
+pub fn sys_linkat(old_name: *const u8, new_name: *const u8) -> isize {
     trace!("kernel:pid[{}] sys_linkat", current_task().unwrap().pid.0);
-    -1
+    let task = current_task().unwrap();
+    let token = task.get_user_token();
+    let old_path = translated_str(token, old_name);
+    let new_path = translated_str(token, new_name);
+
+    // Return error if old_path and new_path are the same
+    if old_path == new_path {
+        return -1; 
+    }
+    debug!("{},{}", old_path, new_path);
+    linkat(&old_path, &new_path)
 }
 
 /// YOUR JOB: Implement unlinkat.
