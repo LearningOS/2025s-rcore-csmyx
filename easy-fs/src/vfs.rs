@@ -302,8 +302,7 @@ impl Inode {
                     }
 
                     // deallocate inoder id
-                    // TODO: this implementation has a bug
-                    fs.dealloc_inode(self.block_id, self.block_offset);
+                    fs.dealloc_inode(inode_block_id as usize, inode_block_offset);
                 }
             };
             debug!("unlink inode id: {}", inode_id);
