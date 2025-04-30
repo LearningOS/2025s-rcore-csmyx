@@ -172,7 +172,7 @@ impl Inode {
         });
 
         let (block_id, block_offset) = fs.get_disk_inode_pos(new_inode_id);
-        // debug!("create pos: {}, {}, {}", block_id, block_offset, new_inode_id);
+        debug!("create inode id: {}", new_inode_id);
         block_cache_sync_all();
         // return inode
         Some(Arc::new(Self::new(
@@ -217,7 +217,7 @@ impl Inode {
         });
         // increment inode's link number
         let (inode_block_id, inode_block_offset) = fs.get_disk_inode_pos(inode_id);
-        // debug!("link pos: {}, {}, {}", inode_block_id, inode_block_offset, inode_id);
+        debug!("link inode id: {}", inode_id);
         get_block_cache(inode_block_id as usize, Arc::clone(&self.block_device))
             .lock()
             .modify(inode_block_offset, |new_inode: &mut DiskInode| {
@@ -284,6 +284,7 @@ impl Inode {
                 let new_size = (file_count - 1) * DIRENT_SZ;
                 self.decrease_size(new_size as u32, root_inode);
             });
+            let (inode_block_id, inode_block_offset) = fs.get_disk_inode_pos(inode_id);
             // decrement inode's link number, then try to release current inode
             let try_release_by_nlink_dec = |inode: &mut DiskInode| {
                 inode.nlink_dec();
@@ -301,10 +302,11 @@ impl Inode {
                     }
 
                     // deallocate inoder id
+                    // TODO: this implementation has a bug
                     fs.dealloc_inode(self.block_id, self.block_offset);
                 }
             };
-            let (inode_block_id, inode_block_offset) = fs.get_disk_inode_pos(inode_id);
+            debug!("unlink inode id: {}", inode_id);
             get_block_cache(inode_block_id as usize, Arc::clone(&self.block_device))
                 .lock()
                 .modify(inode_block_offset, try_release_by_nlink_dec);
@@ -340,7 +342,7 @@ impl Inode {
     pub fn write_at(&self, offset: usize, buf: &[u8]) -> usize {
         let mut fs = self.fs.lock();
         let size = self.modify_disk_inode(|disk_inode| {
-            debug!("increase_size write_at: before {}, after {}, len {}", disk_inode.size, offset + buf.len(), buf.len());
+            // debug!("increase_size write_at: before {}, after {}, len {}", disk_inode.size, offset + buf.len(), buf.len());
             self.increase_size((offset + buf.len()) as u32, disk_inode, &mut fs);
             disk_inode.write_at(offset, buf, &self.block_device)
         });

@@ -190,11 +190,10 @@ impl File for OSInode {
     }
 }
 
-/// TODO: this implementation has a bug
 impl Drop for OSInode {
     fn drop(&mut self) {
-        debug!("drop ");
         let inode = &self.inner.exclusive_access().inode;
+        debug!("drop inode id: {} ", inode.inode_id());
         inode.try_release_by_fcount_dec();
     }
 }

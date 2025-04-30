@@ -180,9 +180,8 @@ i_count: 简单来说，只要创建fd和inode关联时就自增，包括open，
 i_nlink: 包括open(仅限实际执行了create操作的open)，link，unlink
 
 ##### bug
-![alt text](image.png)
 ![alt text](image-1.png)
-![alt text](image-2.png)
+
 #### fstat
 ##### questions
     1. 如何根据fd文件描述符获取其对应的inode？

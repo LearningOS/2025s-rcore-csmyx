@@ -73,6 +73,7 @@ pub fn sys_close(fd: usize) -> isize {
     if inner.fd_table[fd].is_none() {
         return -1;
     }
+    debug!("sys_close");
     inner.fd_table[fd].take();
     0
 }
