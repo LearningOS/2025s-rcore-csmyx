@@ -169,8 +169,11 @@ pub fn sys_sbrk(size: i32) -> isize {
 pub fn sys_spawn(path: *const u8) -> isize {
     trace!("kernel:pid[{}] sys_spawn", current_task().unwrap().pid.0);
     let token = current_user_token();
-    let path = translated_str(token, path);
-    let new_task = Arc::new(TaskControlBlock::new(get_app_data_by_name(&path).unwrap()));
+    let name = translated_str(token, path);
+    let inode = open_file(name.as_str(), OpenFlags::RDONLY).unwrap();
+    let v = inode.read_all();
+    let new_task = Arc::new(TaskControlBlock::new(v.as_slice()));
+
     let pid = new_task.pid.0;
 
     // set the new task's parent to the current task
