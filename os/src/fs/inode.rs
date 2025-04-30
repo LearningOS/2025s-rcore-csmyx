@@ -108,6 +108,7 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
         if let Some(inode) = ROOT_INODE.find(name) {
             // clear size
             inode.clear();
+            inode.fcount_inc();
             Some(Arc::new(OSInode::new(readable, writable, inode)))
         } else {
             // create file
@@ -120,6 +121,7 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
             if flags.contains(OpenFlags::TRUNC) {
                 inode.clear();
             }
+            inode.fcount_inc();
             Arc::new(OSInode::new(readable, writable, inode))
         })
     }
@@ -138,6 +140,10 @@ pub fn linkat(old_name: &str, new_name: &str) -> isize {
     }
 }
 
+/// Unlink a file
+pub fn unlink(name: &str) -> isize {
+    ROOT_INODE.unlink(name)
+}
 
 impl File for OSInode {
     fn readable(&self) -> bool {
@@ -181,5 +187,14 @@ impl File for OSInode {
         };
         let nlink = inode.get_disk_inode_nlink();
         Some(Stat::init(inode_id as u64, mode, nlink))
+    }
+}
+
+/// TODO: this implementation has a bug
+impl Drop for OSInode {
+    fn drop(&mut self) {
+        debug!("drop ");
+        let inode = &self.inner.exclusive_access().inode;
+        inode.try_release_by_fcount_dec();
     }
 }

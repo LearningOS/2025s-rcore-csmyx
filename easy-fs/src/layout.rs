@@ -1,13 +1,13 @@
 use super::{get_block_cache, BlockDevice, BLOCK_SZ};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use log::debug;
 use core::fmt::{Debug, Formatter, Result};
+use log::debug;
 
 /// Magic number for sanity check
 const EFS_MAGIC: u32 = 0x3b800001;
 /// The max number of direct inodes
-const INODE_DIRECT_COUNT: usize = 27;
+const INODE_DIRECT_COUNT: usize = 26;
 /// The max length of inode name
 const NAME_LENGTH_LIMIT: usize = 27;
 /// The max number of indirect1 inodes
@@ -89,7 +89,10 @@ pub struct DiskInode {
     pub indirect1: u32,
     pub indirect2: u32,
     pub type_: DiskInodeType,
+    /// count of dir_entries to this inode
     pub nlink: u32,
+    /// count of opened fds to this inode
+    pub fcount: u32,
 }
 
 impl DiskInode {
@@ -102,16 +105,28 @@ impl DiskInode {
         self.indirect2 = 0;
         self.type_ = type_;
         self.nlink = 1;
+        self.fcount = 1;
     }
-    /// increment link number by 1
+    /// increment link count by 1
     pub fn nlink_inc(&mut self) {
         self.nlink += 1;
         debug!("nlink_inc: {}", self.nlink);
     }
-    // /// decrement link number by 1
-    // pub fn nlink_dec(&mut self) {
-    //     self.nlink -= 1;
-    // }
+    /// decrement link count by 1
+    pub fn nlink_dec(&mut self) {
+        self.nlink -= 1;
+        debug!("nlink_dec: {}", self.nlink);
+    }
+    /// increment fd count by 1
+    pub fn fcount_inc(&mut self) {
+        self.fcount += 1;
+        debug!("fcount_inc: {}", self.fcount);
+    }
+    /// decrement fd count by 1
+    pub fn fcount_dec(&mut self) {
+        self.fcount -= 1;
+        debug!("fcount_dec: {}", self.fcount);
+    }
 
     /// Whether this inode is a directory
     pub fn is_dir(&self) -> bool {
@@ -150,6 +165,11 @@ impl DiskInode {
     pub fn blocks_num_needed(&self, new_size: u32) -> u32 {
         assert!(new_size >= self.size);
         Self::total_blocks(new_size) - Self::total_blocks(self.size)
+    }
+    /// Get the number of data blocks that have to be deallocated given the new size of data
+    pub fn blocks_num_needed_dec(&self, new_size: u32) -> u32 {
+        assert!(new_size <= self.size);
+        Self::total_blocks(self.size) - Self::total_blocks(new_size)
     }
     /// Get id of block given inner id
     pub fn get_block_id(&self, inner_id: u32, block_device: &Arc<dyn BlockDevice>) -> u32 {
@@ -249,7 +269,84 @@ impl DiskInode {
                 }
             });
     }
-
+    /// Shrink to given size and return blocks that should be deallocated.
+    /// We will clear the block contents to zero later.
+    pub fn shrink_size(
+        &mut self,
+        reserve_size: u32,
+        block_device: &Arc<dyn BlockDevice>,
+    ) -> Vec<u32> {
+        let mut v: Vec<u32> = Vec::new();
+        let mut data_blocks = self.data_blocks() as usize;
+        let mut current_blocks = Self::_data_blocks(reserve_size) as usize;
+        assert!(current_blocks <= data_blocks);
+        self.size = reserve_size;
+        // direct
+        while current_blocks < data_blocks.min(INODE_DIRECT_COUNT) {
+            v.push(self.direct[current_blocks]);
+            self.direct[current_blocks] = 0;
+            current_blocks += 1;
+        }
+        // indirect1 block
+        if data_blocks > INODE_DIRECT_COUNT {
+            v.push(self.indirect1);
+            data_blocks -= INODE_DIRECT_COUNT;
+            current_blocks = 0;
+        } else {
+            return v;
+        }
+        // indirect1
+        get_block_cache(self.indirect1 as usize, Arc::clone(block_device))
+            .lock()
+            .modify(0, |indirect1: &mut IndirectBlock| {
+                while current_blocks < data_blocks.min(INODE_INDIRECT1_COUNT) {
+                    v.push(indirect1[current_blocks]);
+                    //indirect1[current_blocks] = 0;
+                    current_blocks += 1;
+                }
+            });
+        self.indirect1 = 0;
+        // indirect2 block
+        if data_blocks > INODE_INDIRECT1_COUNT {
+            v.push(self.indirect2);
+            data_blocks -= INODE_INDIRECT1_COUNT;
+        } else {
+            return v;
+        }
+        // indirect2
+        assert!(data_blocks <= INODE_INDIRECT2_COUNT);
+        let a1 = data_blocks / INODE_INDIRECT1_COUNT;
+        let b1 = data_blocks % INODE_INDIRECT1_COUNT;
+        get_block_cache(self.indirect2 as usize, Arc::clone(block_device))
+            .lock()
+            .modify(0, |indirect2: &mut IndirectBlock| {
+                // full indirect1 blocks
+                for entry in indirect2.iter_mut().take(a1) {
+                    v.push(*entry);
+                    get_block_cache(*entry as usize, Arc::clone(block_device))
+                        .lock()
+                        .modify(0, |indirect1: &mut IndirectBlock| {
+                            for entry in indirect1.iter() {
+                                v.push(*entry);
+                            }
+                        });
+                }
+                // last indirect1 block
+                if b1 > 0 {
+                    v.push(indirect2[a1]);
+                    get_block_cache(indirect2[a1] as usize, Arc::clone(block_device))
+                        .lock()
+                        .modify(0, |indirect1: &mut IndirectBlock| {
+                            for entry in indirect1.iter().take(b1) {
+                                v.push(*entry);
+                            }
+                        });
+                    //indirect2[a1] = 0;
+                }
+            });
+        self.indirect2 = 0;
+        v
+    }
     /// Clear size to zero and return blocks that should be deallocated.
     /// We will clear the block contents to zero later.
     pub fn clear_size(&mut self, block_device: &Arc<dyn BlockDevice>) -> Vec<u32> {

@@ -17,6 +17,8 @@ pub trait File: Send + Sync {
     fn write(&self, buf: UserBuffer) -> usize;
     /// get file state
     fn state(&self) -> Option<Stat>;
+    // valid
+    // fn valid(&self) -> bool;
 }
 
 /// The stat of a inode
@@ -61,5 +63,5 @@ bitflags! {
     }
 }
 
-pub use inode::{list_apps, open_file, linkat, OSInode, OpenFlags};
+pub use inode::{list_apps, open_file, linkat, unlink, OSInode, OpenFlags};
 pub use stdio::{Stdin, Stdout};
